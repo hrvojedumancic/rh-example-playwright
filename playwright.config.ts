@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: 'html',
   use: {
     // URL of the app under test (lives in another repo). Override with BASE_URL.
-    baseURL: process.env.BASE_URL ?? 'http://localhost:3000',
+    baseURL: process.env.BASE_URL ?? 'http://localhost:3003',
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

@@ -1,0 +1,91 @@
+# Triggered by rh-example-frontend when a PR is opened: Claude writes Playwright
+# tests for the PR's feature, runs them against the PR build, and opens a PR here.
+name: Generate tests for frontend PR
+on:
+  repository_dispatch:
+    types: [frontend-pr]
+  workflow_dispatch: # manual re-run
+    inputs:
+      pr_number:
+        description: Frontend PR number
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PR: ${{ github.event.client_payload.pr_number || inputs.pr_number }}
+      FRONTEND_REPO: hrvojedumancic/rh-example-frontend
+      BASE_URL: http://localhost:3003
+      GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out frontend PR
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FRONTEND_REPO }}
+          ref: refs/pull/${{ env.PR }}/head
+          path: frontend
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Build and start frontend
+        working-directory: frontend
+        run: |
+          npm ci && npm run build
+          nohup npm start > "$RUNNER_TEMP/frontend.log" 2>&1 &
+          for i in $(seq 60); do curl -sf "$BASE_URL" > /dev/null && exit 0; sleep 2; done
+          cat "$RUNNER_TEMP/frontend.log"; exit 1
+
+      - name: Fetch PR diff
+        run: |
+          gh pr view "$PR" -R "$FRONTEND_REPO" --json title,body --jq '"# " + .title + "\n\n" + .body' > "$RUNNER_TEMP/pr.md"
+          gh pr diff "$PR" -R "$FRONTEND_REPO" >> "$RUNNER_TEMP/pr.md"
+
+      - name: Write tests with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: --allowedTools "Read,Write,Edit,Glob,Grep,Bash(npx playwright test:*)"
+          prompt: |
+            A pull request was opened in the frontend repo. Its source is checked out at ./frontend
+            and the app is running at ${{ env.BASE_URL }} (already the baseURL in playwright.config.ts).
+            The PR title, description and diff are in ${{ runner.temp }}/pr.md.
+
+            1. Read the PR and the relevant code under ./frontend/src to understand the feature.
+            2. Write Playwright tests for that feature in tests/frontend-pr-${{ env.PR }}.spec.ts.
+               Use relative URLs and user-facing locators (getByRole, getByLabel, getByText).
+            3. Run them with `npx playwright test tests/frontend-pr-${{ env.PR }}.spec.ts` and fix the tests until they pass.
+               Never weaken an assertion just to make it pass: if the app is genuinely broken,
+               keep the failing test and explain the bug in a comment above it.
+            Only create or edit files under tests/.
+
+      - name: Open PR with tests
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: tests/frontend-pr-${{ env.PR }}
+          add-paths: tests/**
+          commit-message: "Add tests for frontend PR #${{ env.PR }}"
+          title: "Tests for frontend PR #${{ env.PR }}"
+          body: "Auto-generated Playwright tests for ${{ env.FRONTEND_REPO }}#${{ env.PR }}."
+
+      - name: Link tests on the frontend PR
+        if: steps.cpr.outputs.pull-request-url
+        run: |
+          gh pr comment "$PR" -R "$FRONTEND_REPO" --body "🎭 Playwright tests generated: ${{ steps.cpr.outputs.pull-request-url }}"
