@@ -60,16 +60,24 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          show_full_output: true
           claude_args: --allowedTools "Read,Write,Edit,Glob,Grep,Bash(npx playwright test:*)"
           prompt: |
             A pull request was opened in the frontend repo. Its source is checked out at ./frontend
             and the app is running at ${{ env.BASE_URL }} (already the baseURL in playwright.config.ts).
             The PR title, description and diff are in ${{ runner.temp }}/pr.md.
 
-            1. Read the PR and the relevant code under ./frontend/src to understand the feature.
-            2. Write Playwright tests for that feature in tests/frontend-pr-${{ env.PR }}.spec.ts.
+            Tests are organized by page/feature (e.g. tests/dashboard.spec.ts), not by PR.
+
+            1. Read the PR and the relevant code under ./frontend/src to understand what changed.
+            2. Read the existing tests under tests/. Make the SMALLEST change that covers this PR:
+               - If an existing test covers the changed behavior, edit only the affected lines
+                 (e.g. a changed label means changing just that expected string).
+               - Add new tests only for genuinely new behavior, in the matching page file;
+                 create a new file only for a new page/feature.
+               - Never rewrite, reorder or reformat existing tests, and do not touch unrelated tests.
                Use relative URLs and user-facing locators (getByRole, getByLabel, getByText).
-            3. Run them with `npx playwright test tests/frontend-pr-${{ env.PR }}.spec.ts` and fix the tests until they pass.
+            3. Run the spec files you changed with `npx playwright test <file>` and fix your changes until they pass.
                Never weaken an assertion just to make it pass: if the app is genuinely broken,
                keep the failing test and explain the bug in a comment above it.
             Only create or edit files under tests/.
