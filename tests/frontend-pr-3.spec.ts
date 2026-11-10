@@ -3,12 +3,12 @@ import { test, expect } from "@playwright/test";
 test.describe("Third Practice Dashboard heading", () => {
   test("home page shows the new heading", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Fourth and I hope final Practice Dashboard", level: 4 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Karlo Dashboard", level: 4 })).toBeVisible();
   });
 
   test("previous heading text is gone", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Second Practice Dashboard" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Fourth and I hope final Practice Dashboard" })).toHaveCount(0);
   });
 
   test("sidebar nav link is still labelled Dashboard", async ({ page }) => {
@@ -44,6 +44,6 @@ test.describe("Third Practice Dashboard heading", () => {
     await page.goto("/patients");
     await page.getByRole("link", { name: "Dashboard" }).click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("heading", { name: "Fourth and I hope final Practice Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Karlo Dashboard" })).toBeVisible();
   });
 });
